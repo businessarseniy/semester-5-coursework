@@ -56,6 +56,7 @@ pub fn build(b: *Build) anyerror!void {
             "hal.c",
             "keyboard.c",
             "pic.c",
+            "pio.c",
             "pit.c",
         },
     });
@@ -105,8 +106,10 @@ pub fn build(b: *Build) anyerror!void {
     const run_cmd = b.addSystemCommand(&.{"qemu-system-i386"});
     run_cmd.addArg("-kernel");
     run_cmd.addArtifactArg(kernel);
-    // run_cmd.addArg("-no-reboot");
-    // run_cmd.addArg("-no-shutdown");
+    run_cmd.addArg("-no-reboot");
+    run_cmd.addArg("-no-shutdown");
+    run_cmd.addArg("-drive");
+    run_cmd.addArg("file=fat32.img,format=raw,index=0");
     run_step.dependOn(kernel_step);
     run_step.dependOn(&run_cmd.step);
 }
