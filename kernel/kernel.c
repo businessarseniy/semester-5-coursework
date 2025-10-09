@@ -66,7 +66,7 @@ void bar(void){
 }
 
 void ksmain(void){
-    tty.print("Now kmain runs in scheduler --> \"ksmain\"\n");
+    tty.print("Now kmain runs in scheduler\n");
     tty.print("Switch to userspace (ring3) via iret\n");
     switch_ring3((uint32_t)&main, (uint32_t)&stack[1024]);
     while (1){}
@@ -95,6 +95,5 @@ void kmain(void){
     /* process_control_block_t* r = */scheduler.create((uint32_t)&bar);
     idt.init();
     tty.print("Interrupts will happen, including syscalls\n");
-    asm volatile("int $0x80");
     while (1){}
 }

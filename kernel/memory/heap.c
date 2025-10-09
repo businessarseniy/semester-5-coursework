@@ -43,6 +43,7 @@ static void* malloc(int size){
 }
 
 static void free(void* ptr){
+    if (ptr < HEAP_START_ADRESS || ptr > HEAP_END_ADRESS) return;
     heap_block_header_t* header = ptr - sizeof(heap_block_header_t);
     header->available = 1;
     uint32_t freed_blocks = 1;

@@ -47,6 +47,7 @@ pub fn build(b: *Build) anyerror!void {
     kernel.addCSourceFiles(.{
         .root = b.path("./kernel/filesystem/"),
         .files = &.{
+            "fat32.c",
             "vfs.c",
         },
     });
