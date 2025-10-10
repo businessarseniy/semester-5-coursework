@@ -1,6 +1,6 @@
 #include "kernel/hardware/pit.h"
 #include "kernel/memory/heap.h"
-// #include "kernel/memory/paging.h"
+#include "kernel/memory/paging.h"
 #include "kernel/memory/physical.h"
 #include "kernel/multitasking/scheduler.h"
 #include "kernel/queue.h"
@@ -60,13 +60,14 @@ static void save_current(interrupt_frame_t* frame, process_control_block_t* curr
             break;
         default:
             // unreachable?
+            break;
     }
 }
 
 static void load_current(interrupt_frame_t* frame, process_control_block_t* current){
     frame->eip = current->eip;
     frame->esp_original = current->esp;
-    // frame->cr3 = (uint32_t)current->page_directory;
+    frame->cr3 = (uint32_t)current->cr3;
     // context
     frame->eax = current->context.eax;
     frame->ebx = current->context.ebx;
@@ -133,7 +134,7 @@ static void schedule(interrupt_frame_t* frame){
     while ((void*)0 != _d){
         // notify parent of done process
         __all[_d->pid] = (void*)0;
-        palloc.free(_d->stack);
+        paging.destroy_directory(_d->cr3);
         halloc.free(_d);
 
         _d = __done.pop(&__done);
@@ -156,12 +157,11 @@ static process_control_block_t* create(uint32_t entry){
     __all[pcb->pid] = pcb;
     pcb->eip = entry;
     pcb->state = STATE_START;
-    pcb->stack = palloc.malloc(-1);
+    pcb->cr3 = paging.default_directory();
+    paging.create_page(0, (void*)(((uint32_t*)pcb->cr3)[3] & ~0xfff), PRESENT | READWRITE | USER);
+    pcb->stack = (void*)0xc00000;
     pcb->esp = (uint32_t)(&pcb->stack[1024]);
     pcb->context.eflags = 0x202;
-    // pcb->page_directory = paging.default_directory();
-    // pcb->children = 0;
-    // pcb->parent = (void*)0;
 
     __start.push(&__start, pcb);
     return pcb;

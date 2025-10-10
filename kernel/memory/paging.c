@@ -26,16 +26,18 @@ static void* create_table(int index, void* directory, int flags){
     return table;
 }
 
-static void create_page(int index, void* table, int flags){
+static void* create_page(int index, void* table, int flags){
     // Allocates page into page table with flags
     uint32_t* page = palloc.malloc(-1);
     memset(page, 4096, 0);
     ((uint32_t*)table)[index] = (uint32_t)page | (flags & 0xfff);
+    return page;
 }
 
 static void destroy_page(int index, void* table){
     // Clears table entry based on index and frees physical allocation of page
     void* page = (void*)(((uint32_t*)table)[index] & ~(0xfff));
+    if ((void*)0 == page || (void*)0xb8000 == page) return;
     palloc.free(page);
     ((uint32_t*)table)[index] = 0;
 }
@@ -43,6 +45,7 @@ static void destroy_page(int index, void* table){
 static void destroy_table(int index, void* directory){
     // Clears table and deallocates pages + table
     void* table = (void*)(((uint32_t*)directory)[index] & ~(0xfff));
+    if ((void*)0 == table) return;
     for (int i = 0; i < 1024; ++i){
         destroy_page(i, table);
     }
@@ -52,7 +55,7 @@ static void destroy_table(int index, void* directory){
 
 static void destroy_directory(void* directory){
     // Clears directory and deallocates tables + directory
-    for (int i = 0; i < 1024; ++i){
+    for (int i = 3; i < 1024; ++i){
         destroy_table(i, directory);
     }
     palloc.free(directory);
@@ -61,20 +64,24 @@ static void destroy_directory(void* directory){
 static void* default_directory(void){
     void* directory = create_directory();
     // First 4MiB of RAM -- kernel itself
-    uint32_t* table0 = create_table(0, directory, PRESENT | READWRITE);
+    uint32_t* table0 = create_table(0, directory, PRESENT | USER);
     for (int i = 0; i < 1024; ++i){
-        table0[i] = (0x1000 * i) | PRESENT | READWRITE;
+        table0[i] = (0x1000 * i) | PRESENT | USER;
     }
     // 4MiB..8MiB of RAM -- kernel page allocations
-    uint32_t* table1 = create_table(1, directory, PRESENT | READWRITE);
+    uint32_t* table1 = create_table(1, directory, PRESENT);
     for (int i = 0; i < 1024; ++i){
-        table1[i] = (0x400000 + 0x1000 * i) | PRESENT | READWRITE;
+        table1[i] = (0x400000 + 0x1000 * i) | PRESENT;
     }
     // 8MiB..12MiB of RAM -- kernel heap allocations
-    uint32_t* table2 = create_table(2, directory, PRESENT | READWRITE);
+    uint32_t* table2 = create_table(2, directory, PRESENT);
     for (int i = 0; i < 1024; ++i){
-        table2[i] = (0x800000 + 0x1000 * i) | PRESENT | READWRITE;
+        table2[i] = (0x800000 + 0x1000 * i) | PRESENT;
     }
+    // 12MiB..16MiB -- User virtual memory
+    uint32_t* table3 = create_table(3, directory, PRESENT | READWRITE | USER);
+    // VGA buffer
+    table3[1023] = 0xb8000 | PRESENT | READWRITE | USER;
 
     return directory;
 }

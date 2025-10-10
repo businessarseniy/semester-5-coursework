@@ -11,9 +11,8 @@
 extern void switch_ring3(uint32_t entry, uint32_t stack_top);
 
 
-uint32_t stack[1024] = {};
 void main(void){
-    short volatile* vga = (void*)0xb8000;
+    short volatile* vga = (void*)0xfff000;
     short color = 0xab;
     while (1){
         vga[0] = (color << 8) | 'x';
@@ -24,7 +23,7 @@ void main(void){
 
 void foo(void){
     // pid=2
-    short volatile* vga = (void*)0xb8000;
+    short volatile* vga = (void*)0xfff000;
     short color = 0x01;
     for (int i = 0; i < 10000000; ++i){
         vga[77] = (color << 8) | 'f';
@@ -38,7 +37,7 @@ void foo(void){
 }
 void baz(void){
     // pid=3
-    short volatile* vga = (void*)0xb8000;
+    short volatile* vga = (void*)0xfff000;
     short color = 0x12;
     for (int i = 0; i < 10000000; ++i){
         vga[78] = (color << 8) | 'z';
@@ -52,7 +51,7 @@ void baz(void){
 }
 void bar(void){
     // pid=4
-    short volatile* vga = (void*)0xb8000;
+    short volatile* vga = (void*)0xfff000;
     short color = 0x23;
     for (int i = 0; i < 10000000; ++i){
         vga[79] = (color << 8) | 'r';
@@ -68,7 +67,7 @@ void bar(void){
 void ksmain(void){
     tty.print("Now kmain runs in scheduler\n");
     tty.print("Switch to userspace (ring3) via iret\n");
-    switch_ring3((uint32_t)&main, (uint32_t)&stack[1024]);
+    switch_ring3((uint32_t)&main, 0xc00000 + 1024 * 4);
     while (1){}
 }
 
@@ -85,8 +84,8 @@ void kmain(void){
     gdt.init();
     tss.init();
     tty.print("Protected mode, need to implement interrupts\n");
-    // tty.print("Enable paging\n");
-    // paging.init();
+    tty.print("Enable paging\n");
+    paging.init();
     tty.printf("Scheduler initialization, pending EIP=%x\n", &ksmain);
     scheduler.init();
     scheduler.create((uint32_t)&ksmain);
