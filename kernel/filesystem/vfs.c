@@ -5,6 +5,9 @@
 static void init(void){
     // Init chosen filesystem
     fat32.init();
+    vfs.open = fat32.open;
+    vfs.read = fat32.read;
+    vfs.close = fat32.close;
 }
 
 
