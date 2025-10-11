@@ -1,5 +1,8 @@
 #include "kernel/filesystem/vfs.h"
 #include "kernel/interrupt/syscall.h"
+#include "kernel/memory/heap.h"
+#include "kernel/memory/paging.h"
+#include "kernel/multitasking/elf.h"
 #include "kernel/multitasking/scheduler.h"
 #include "kernel/tty.h"
 
@@ -22,7 +25,14 @@ static void memcpy(void* dst, void* src, int size){
     }
 }
 
-void notify_parent_complete(process_control_block_t* process){
+static void memset(void* dst, int size, int val){
+    uint8_t* p_dst = dst;
+    for (int i = 0; i < size; ++i){
+        p_dst[i] = (uint8_t)val;
+    }
+}
+
+static void notify_parent_complete(process_control_block_t* process){
     if ((void*)0 == process->parent) return;
     for (int i = 0; i < 32; ++i){
         if (process->parent->child[i] != process->pid) continue;
@@ -71,7 +81,66 @@ static int close(interrupt_frame_t* frame, int fd){
     return res;
 }
 static int execve(interrupt_frame_t* frame, char* name, char* argv[], char* env[]){
-    return 0;
+    process_control_block_t* current = scheduler.current();
+    if (0xffffffff == current->child_bitmap){
+        return -1;
+    }
+    // no flags and mode for now
+    int fd = vfs.open(name, -1, -1);
+    // not found executable
+    if (fd == -1){
+        return -1;
+    }
+    
+    elf_header_t* eheader = halloc.malloc(sizeof(elf_header_t));
+    vfs.read(fd, eheader, sizeof(elf_header_t));
+
+    if (!elf.is_elf(eheader)){
+        halloc.free(eheader);
+        vfs.close(fd);
+        return -1;
+    }
+    
+    // elf x86 executable
+    int pheader_size = eheader->program_header_entry_count * eheader->program_header_entry_size;
+    elf_program_header_entry_t* pheader = halloc.malloc(pheader_size);
+    vfs.lseek(fd, eheader->program_header_table_offset, -1);
+    vfs.read(fd, pheader, pheader_size);
+    
+    process_control_block_t* new = scheduler.create(eheader->program_entry_offset);
+    uint32_t* directory = new->cr3;
+    for (int i = 0; i < eheader->program_header_entry_count; ++i){
+        if (pheader[i].type != ELF_HEADER_TYPE_LOAD) continue;
+        // only PT_LOAD for now
+        int paging_table = pheader[i].p_vaddr / 0x400000;
+        int page_index = (pheader[i].p_vaddr % 0x400000) / 0x1000;
+        uint32_t table = directory[paging_table] & ~0xfff;
+        // ignore size of header
+        void* page = paging.create_page(
+            page_index,
+            (void*)table,
+            PRESENT | USER | (pheader[i].flags & ELF_HEADER_FLAG_WRITABLE ? READWRITE : 0)
+        );
+        memset(page, 4096, 0);
+        vfs.lseek(fd, pheader[i].p_offset, -1);
+        vfs.read(fd, page, pheader[i].p_filesz);
+    }
+
+    new->parent = current;
+    notify_parent_create(new);
+    current->state = STATE_WAITING;
+
+    // argv
+    // env
+    new->stack[1023] = 0;
+    --new->esp;
+    new->stack[1022] = 0;
+    --new->esp;
+    
+    halloc.free(pheader);
+    halloc.free(eheader);
+    vfs.close(fd);
+    return new->pid;
 }
 static int fork(interrupt_frame_t* frame){
     process_control_block_t* current = scheduler.current();
@@ -177,7 +246,7 @@ static _ssize_t write(interrupt_frame_t* frame, int fd, void* buf, size_t cnt){
             break;
         case 1: // STDOUT
         case 2: // STDERR
-            for (int i = 0; i < cnt; ++i) tty.printf("%c", ((char*)buf)[i]);
+            for (int i = 0; i < cnt; ++i) tty.putchar(((char*)buf)[i]);
             res = cnt;
             break;
         default: // file
@@ -209,8 +278,8 @@ static int isatty(interrupt_frame_t* frame, int file){
 
 
 static void handler(interrupt_frame_t* frame){
-    tty.printf("Syscall %d happened!\n", frame->eax);
-    tty.printf("    @ %x\n", frame->esp_original);
+    // tty.printf("Syscall %d happened!\n", frame->eax);
+    // tty.printf("    Stack @%x, %x:%x\n", frame->esp_original, frame->cs, frame->eip);
     // syscall selector
     int eax = frame->eax;
     // arguments
@@ -224,6 +293,7 @@ static void handler(interrupt_frame_t* frame){
             break;
         case SYSCALL_EXECVE:
             frame->eax = execve(frame, (char*)arg0, (char**)arg1, (char**)arg2);
+            scheduler.schedule(frame);
             break;
         case SYSCALL_FORK:
             frame->eax = fork(frame);

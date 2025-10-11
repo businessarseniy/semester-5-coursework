@@ -8,6 +8,7 @@ static void init(void){
     vfs.open = fat32.open;
     vfs.read = fat32.read;
     vfs.close = fat32.close;
+    vfs.lseek = fat32.lseek;
 }
 
 

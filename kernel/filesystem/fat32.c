@@ -70,7 +70,7 @@ static void read_fat(void){
 static void read_root_directory(void){
     __fs.first_data_sector = __boot_record.extended.sectors_per_fat * __boot_record.bpb.fats_count + __boot_record.bpb.reserved_sectors;
     __fs.root_dir_sector = __fs.first_data_sector + cluster2lba(__boot_record.extended.root_directory_cluster - 2);
-    __buffer = halloc.malloc(__boot_record.bpb.bytes_per_sector);
+    // __buffer = halloc.malloc(__boot_record.bpb.bytes_per_sector);
     // pio.read(__buffer, __fs.root_dir_sector, 1);
     // fat32_directory_entry_t* root_dir = __buffer;
     // for (int i = 0; root_dir[i].creation_date; ++i){
@@ -222,19 +222,22 @@ static int close(int fd){
 static void init(void){
     read_boot_record();
     read_root_directory();
-    // read_fat();
-    int fd = open("/FOLDER/HELLO.TXT", 0, 0);
-    tty.printf("fd: %d\n", fd);
-    void* bufff = halloc.malloc(1024);
-    memset(bufff, 1024, 0);
-    tty.printf("cnt: %d\n", read(fd, bufff, 50));
-    tty.printf("~~%s~~\n", bufff);
 }
 
+static int lseek(int fd, int pos, int whence){
+    if (fd < 0 || fd >= 32) return -1;
+    fat32_file_t* file = __files[fd];
+    if ((void*)0 == file) return -1;
+
+    // TODO: security check!!!
+    file->pos = pos;
+    return 0;
+}
 
 Fat32_t fat32 = {
     .init = &init,
     .open = &open,
     .read = &read,
     .close = &close,
+    .lseek = &lseek,
 };

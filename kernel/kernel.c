@@ -12,6 +12,17 @@ extern void switch_ring3(uint32_t entry, uint32_t stack_top);
 
 
 void main(void){
+    char* exe = "/A.OUT";
+    asm volatile(
+        "mov $1, %%eax\n"
+        "mov %0, %%ebx\n"
+        "mov $0, %%ecx\n"
+        "mov $0, %%edx\n"
+        "int $0x80\n"
+        :
+        : "r"(&exe[0])
+        : "eax", "ebx", "ecx", "edx"
+    );
     short volatile* vga = (void*)0xfff000;
     short color = 0xab;
     while (1){
@@ -83,15 +94,15 @@ void kmain(void){
     tty.print("Going protected mode with flat segmentation model\n");
     gdt.init();
     tss.init();
-    tty.print("Protected mode, need to implement interrupts\n");
     tty.print("Enable paging\n");
     paging.init();
-    tty.printf("Scheduler initialization, pending EIP=%x\n", &ksmain);
     scheduler.init();
+    tty.printf("Scheduler initialization, pending EIP=%x\n", &ksmain);
     scheduler.create((uint32_t)&ksmain);
     /* process_control_block_t* f = */scheduler.create((uint32_t)&foo);
     /* process_control_block_t* z = */scheduler.create((uint32_t)&baz);
     /* process_control_block_t* r = */scheduler.create((uint32_t)&bar);
+    tty.print("Protected mode, need to implement interrupts\n");
     idt.init();
     tty.print("Interrupts will happen, including syscalls\n");
     while (1){}

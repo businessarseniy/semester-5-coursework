@@ -83,6 +83,7 @@ pub fn build(b: *Build) anyerror!void {
     kernel.addCSourceFiles(.{
         .root = b.path("./kernel/multitasking/"),
         .files = &.{
+            "elf.c",
             "scheduler.c",
         },
     });

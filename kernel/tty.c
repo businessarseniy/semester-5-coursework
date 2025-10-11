@@ -46,6 +46,8 @@ static void putchar(char c){
         case '\r':
             __col = 0;
             break;
+        case '\0':
+            break;
         default:
             __tty[__row * __width + __col] = __color << 8 | (short)c;
             __col++;
@@ -147,6 +149,7 @@ static void color(tty_color_t color){
 
 Tty_t tty = {
     .init = &init,
+    .putchar = &putchar,
     .print = &print,
     .printf = &printf,
     .color = &color,

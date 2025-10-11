@@ -89,7 +89,7 @@ static void schedule(interrupt_frame_t* frame){
     // moving all new processes into ready queue
     process_control_block_t* _s = __start.pop(&__start);
     while ((void*)0 != _s){
-        tty.printf("New process %d: %x\n", _s->pid, _s->eip);
+        // tty.printf("New process %d: %x\n", _s->pid, _s->eip);
         _s->state = STATE_READY;
         __ready.push(&__ready, _s);
         

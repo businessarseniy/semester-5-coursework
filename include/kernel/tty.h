@@ -10,6 +10,7 @@ typedef enum {
 
 typedef struct {
     void (*init)(void);
+    void (*putchar)(char c);
     void (*print)(char* s);
     void (*printf)(const char* fmt, ...);
     void (*color)(tty_color_t color);
