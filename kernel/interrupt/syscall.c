@@ -1,3 +1,4 @@
+#include "kernel/filesystem/vfs.h"
 #include "kernel/interrupt/syscall.h"
 #include "kernel/multitasking/scheduler.h"
 #include "kernel/tty.h"
@@ -56,7 +57,18 @@ static void notify_parent_create(process_control_block_t* process){
 }
 
 static int close(interrupt_frame_t* frame, int fd){
-    return 0;
+    int res;
+    switch (fd){
+        case 0: // STDIN
+        case 1: // STDOUT
+        case 2: // STDERR
+            res = 0;
+            break;
+        default:
+            res = vfs.close(fd);
+            break;
+    }
+    return res;
 }
 static int execve(interrupt_frame_t* frame, char* name, char* argv[], char* env[]){
     return 0;
@@ -114,10 +126,24 @@ static off_t lseek(interrupt_frame_t* frame, int fd, off_t pos, int whence){
     return 0;
 }
 static int open(interrupt_frame_t* frame, char* file, int flags, int mode){
-    return 0;
+    return vfs.open(file, flags, mode);
 }
 static _ssize_t read(interrupt_frame_t* frame, int fd, void* buf, size_t cnt){
-    return 0;
+    _ssize_t res = 0;
+    switch (fd){
+        case 0: // STDIN
+            // not implemented
+            res = 0;
+            break;
+        case 1: // STDOUT
+        case 2: // STDERR
+            res = 0;
+            break;
+        default: // file
+            res = vfs.read(fd, buf, cnt);
+            break;
+    }
+    return res;
 }
 static void* sbrk(interrupt_frame_t* frame, ptrdiff_t incr){
     return 0;
@@ -144,7 +170,21 @@ static int unlink(interrupt_frame_t* frame, char* file){
     return 0;
 }
 static _ssize_t write(interrupt_frame_t* frame, int fd, void* buf, size_t cnt){
-    return 0;
+    _ssize_t res = 0;
+    switch (fd){
+        case 0: // STDIN
+            res = 0;
+            break;
+        case 1: // STDOUT
+        case 2: // STDERR
+            for (int i = 0; i < cnt; ++i) tty.printf("%c", ((char*)buf)[i]);
+            res = cnt;
+            break;
+        default: // file
+            res = 0;
+            break;
+    }
+    return res;
 }
 static void exit(interrupt_frame_t* frame, int code){
     process_control_block_t* current = scheduler.current();
@@ -153,16 +193,18 @@ static void exit(interrupt_frame_t* frame, int code){
     notify_parent_complete(current);
 }
 static int isatty(interrupt_frame_t* frame, int file){
+    int res;
     switch (file){
         case 0: // STDIN
         case 1: // STDOUT
         case 2: // STDERR
-            return 1;
+            res = 1;
             break;
         default:
-            return 0;
+            res = 0;
             break;
     }
+    return res;
 }
 
 
