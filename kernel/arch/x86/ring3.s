@@ -1,6 +1,7 @@
 .section .text
 .globl switch_ring3
 switch_ring3:
+    cli
     push %ebp
     mov %esp, %ebp
     # userspace function pointer
@@ -19,4 +20,5 @@ switch_ring3:
     pushf
     push $0x1b
     push %ebx
+    sti
     iret

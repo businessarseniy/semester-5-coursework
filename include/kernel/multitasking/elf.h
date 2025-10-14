@@ -41,6 +41,14 @@ enum {
     ELF_HEADER_FLAG_READABLE = 4,
 };
 
+enum {
+    ELF_SECTION_TYPE_NOBITS = 8,
+};
+
+enum {
+    ELF_SECTION_FLAG_ALLOC = 0x2,
+};
+
 typedef struct {
     uint8_t magic[4]; // 0x7F, ELF
     uint8_t word_size;

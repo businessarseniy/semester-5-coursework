@@ -17,6 +17,7 @@ typedef struct __process_control_block {
     uint32_t child_bitmap;
     uint32_t child[32];
     uint32_t* cr3;
+    uint32_t heap_end;
 } process_control_block_t;
 
 typedef struct {

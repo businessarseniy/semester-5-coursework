@@ -160,6 +160,7 @@ static process_control_block_t* create(uint32_t entry){
     pcb->cr3 = paging.default_directory();
     paging.create_page(0, (void*)(((uint32_t*)pcb->cr3)[3] & ~0xfff), PRESENT | READWRITE | USER);
     pcb->stack = (void*)0xc00000;
+    pcb->heap_end = 0xd00000;
     pcb->esp = (uint32_t)(&pcb->stack[1024]);
     pcb->context.eflags = 0x202;
 

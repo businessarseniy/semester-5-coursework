@@ -30,7 +30,6 @@ pub fn build(b: *Build) anyerror!void {
             .optimize = optimize,
             .target = target,
             .unwind_tables = .none,
-            .pic = true,
         }),
     });
 

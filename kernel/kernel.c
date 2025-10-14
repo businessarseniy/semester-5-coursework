@@ -12,9 +12,9 @@ extern void switch_ring3(uint32_t entry, uint32_t stack_top);
 
 
 void main(void){
-    char* exe = "/A.OUT";
+    char* exe = "/BLANK.OUT";
     asm volatile(
-        "mov $1, %%eax\n"
+        "mov $2, %%eax\n"
         "mov %0, %%ebx\n"
         "mov $0, %%ecx\n"
         "mov $0, %%edx\n"
@@ -42,7 +42,7 @@ void foo(void){
         color &= 0xff;
     }
     asm volatile(
-        "mov $16, %eax\n"
+        "mov $0, %eax\n"
         "int $0x80\n"
     );
 }
@@ -56,7 +56,7 @@ void baz(void){
         color &= 0xff;
     }
     asm volatile(
-        "mov $16, %eax\n"
+        "mov $0, %eax\n"
         "int $0x80\n"
     );
 }
@@ -70,7 +70,7 @@ void bar(void){
         color &= 0xff;
     }
     asm volatile(
-        "mov $16, %eax\n"
+        "mov $0, %eax\n"
         "int $0x80\n"
     );
 }

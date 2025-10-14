@@ -1,4 +1,5 @@
 #include "kernel/interrupt/exception.h"
+#include "kernel/multitasking/scheduler.h"
 #include "kernel/tty.h"
 
 
@@ -18,6 +19,8 @@ static void handler(interrupt_frame_t* frame){
     tty.color(COLOR_RED);
     tty.printf("Exception: %s!\n", __names[frame->interrupt]);
     tty.printf("    @ %x:%x\n", frame->cs, frame->eip);
+    process_control_block_t* current = scheduler.current();
+    tty.printf("    Process: %d, esp=%x, eip=%x, state=%d\n", current->pid, current->esp, current->eip, current->state);
     asm volatile("cli");
     asm volatile("hlt");
 }

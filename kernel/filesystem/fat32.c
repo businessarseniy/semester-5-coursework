@@ -110,28 +110,31 @@ static int load_file(void** buffer, fat32_directory_entry_t* entry){
     int lba = __fs.first_data_sector + cluster2lba(cluster - 2);
     int size = entry->filesize;
     *buffer = halloc.malloc(size);
+    int offset = 0;
     memset(*buffer, size, 0);
-    if (size > __boot_record.bpb.bytes_per_sector){
-        // TODO: test it!!!!!!
-        uint32_t* fat = halloc.malloc(__boot_record.bpb.bytes_per_sector);
-        memset(fat, 0, __boot_record.bpb.bytes_per_sector);
-        int offset = 0;
-        // one sector of fat for now
-        pio.read(fat, __boot_record.bpb.reserved_sectors, 1);
-        while (size > __boot_record.bpb.bytes_per_sector){
+    while (size > 0){
+        if (size > __boot_record.bpb.bytes_per_sector){
             pio.read(*buffer + offset, lba, 1);
-            offset += __boot_record.bpb.bytes_per_sector;
-            size -= __boot_record.bpb.bytes_per_sector;
-            cluster = fat[cluster];
-            lba = __fs.first_data_sector + cluster2lba(cluster - 2);
+        } else {
+            void* tmp = halloc.malloc(__boot_record.bpb.bytes_per_sector);
+            pio.read(tmp, lba, 1);
+            memcpy(*buffer + offset, tmp, size);
+            halloc.free(tmp);
+            return 0;
         }
+        uint32_t* fat = halloc.malloc(__boot_record.bpb.bytes_per_sector);
+        memset(fat, __boot_record.bpb.bytes_per_sector, 0);
+        int fat_sector = cluster / (__boot_record.bpb.bytes_per_sector / 4);
+        int fat_offset = cluster % (__boot_record.bpb.bytes_per_sector / 4);
+        
+        pio.read(fat, __boot_record.bpb.reserved_sectors + fat_sector, 1);
+        cluster = fat[fat_offset];
+        lba = __fs.first_data_sector + cluster2lba(cluster - 2);
+        offset += __boot_record.bpb.bytes_per_sector;
+        size -= __boot_record.bpb.bytes_per_sector;
         halloc.free(fat);
-        return 0;
     }
-    // just read
-    pio.read(*buffer, lba, 1);
-    // maybe return fd?
-    return 0;
+    return -1;
 }
 
 static void unload_file(void* buffer){

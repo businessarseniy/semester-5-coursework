@@ -115,15 +115,43 @@ static int execve(interrupt_frame_t* frame, char* name, char* argv[], char* env[
         int paging_table = pheader[i].p_vaddr / 0x400000;
         int page_index = (pheader[i].p_vaddr % 0x400000) / 0x1000;
         uint32_t table = directory[paging_table] & ~0xfff;
-        // ignore size of header
-        void* page = paging.create_page(
-            page_index,
-            (void*)table,
-            PRESENT | USER | (pheader[i].flags & ELF_HEADER_FLAG_WRITABLE ? READWRITE : 0)
-        );
-        memset(page, 4096, 0);
-        vfs.lseek(fd, pheader[i].p_offset, -1);
-        vfs.read(fd, page, pheader[i].p_filesz);
+        int num_pages = (pheader[i].p_filesz + 0x1000 - 1) / 0x1000;
+        int size = pheader[i].p_filesz;
+        for (int j = 0; j < num_pages; ++j){
+            void* page = paging.create_page(
+                page_index + j,
+                (void*)table,
+                PRESENT | USER | (pheader[i].flags & ELF_HEADER_FLAG_WRITABLE ? READWRITE : 0)
+            );
+            memset(page, 4096, 0);
+            vfs.lseek(fd, pheader[i].p_offset + j * 0x1000, -1);
+            if (size > 0x1000){
+                vfs.read(fd, page, 0x1000);
+                size -= 0x1000;
+            } else {
+                vfs.read(fd, page, size);
+            }
+        }
+    }
+
+    int sheader_size = eheader->section_header_entry_size * eheader->section_header_entry_count;
+    elf_section_header_t* sheader = halloc.malloc(sheader_size);
+    vfs.lseek(fd, eheader->section_header_table_offset, -1);
+    vfs.read(fd, sheader, sheader_size);
+
+    for (int i = 0; i < eheader->section_header_entry_count; ++i){
+        elf_section_header_t* section = &sheader[i];
+        if (ELF_SECTION_TYPE_NOBITS == section->sh_type){
+            if (!(section->sh_size)) continue;
+
+            if (ELF_SECTION_FLAG_ALLOC & section->sh_flags){
+                int paging_table = section->sh_addr / 0x400000;
+                int page_index = (section->sh_addr % 0x400000) / 0x1000;
+                uint32_t table = directory[paging_table] & ~0xfff;
+                void* page = paging.create_page(page_index, (uint32_t*)table, PRESENT | READWRITE | USER);
+                memset(page, 0x1000, 0);
+            }
+        }
     }
 
     new->parent = current;
@@ -192,7 +220,18 @@ static int link(interrupt_frame_t* frame, char* old, char* new){
     return 0;
 }
 static off_t lseek(interrupt_frame_t* frame, int fd, off_t pos, int whence){
-    return 0;
+    off_t res = 0;
+    switch (fd){
+        case 0: // STDIN
+        case 1: // STDOUT
+        case 2: // STDERR
+            res = 0;
+            break;
+        default:
+            res = vfs.lseek(fd, pos, whence);
+            break;
+    }
+    return res;
 }
 static int open(interrupt_frame_t* frame, char* file, int flags, int mode){
     return vfs.open(file, flags, mode);
@@ -215,7 +254,22 @@ static _ssize_t read(interrupt_frame_t* frame, int fd, void* buf, size_t cnt){
     return res;
 }
 static void* sbrk(interrupt_frame_t* frame, ptrdiff_t incr){
-    return 0;
+    process_control_block_t* current = scheduler.current();
+    uint32_t heap_end = current->heap_end;
+    if (0 == incr){
+        return (void*)heap_end;
+    }
+    int page_table = heap_end / 0x400000;
+    int page_index = (heap_end % 0x400000) / 0x1000;
+
+    uint32_t* table = (uint32_t*)(current->cr3[page_table] & ~0xfff);
+    // TODO: boundary table process
+    int num = (incr + 0x1000 - 1) / 0x1000;
+    for (int i = 0; i < num; ++i){
+        paging.create_page(page_index + i, table, PRESENT | READWRITE | USER);
+    }
+    current->heap_end = heap_end + 0x1000 * num;
+    return (void*)heap_end;
 }
 static int kill(interrupt_frame_t* frame, int pid, int sig){
     // no check for relation with process with pid
@@ -278,8 +332,8 @@ static int isatty(interrupt_frame_t* frame, int file){
 
 
 static void handler(interrupt_frame_t* frame){
-    // tty.printf("Syscall %d happened!\n", frame->eax);
-    // tty.printf("    Stack @%x, %x:%x\n", frame->esp_original, frame->cs, frame->eip);
+    tty.printf("Syscall %d happened!\n", frame->eax);
+    tty.printf("    Stack @%x, %x:%x\n", frame->esp_original, frame->cs, frame->eip);
     // syscall selector
     int eax = frame->eax;
     // arguments
@@ -324,7 +378,7 @@ static void handler(interrupt_frame_t* frame){
             frame->eax = read(frame, arg0, (void*)arg1, (size_t)arg2);
             break;
         case SYSCALL_SBRK:
-            frame->eax = (int)sbrk(frame, (ptrdiff_t)arg0);
+            frame->eax = (uint32_t)sbrk(frame, (ptrdiff_t)arg0);
             break;
         case SYSCALL_STAT:
             frame->eax = stat(frame, (char*)arg0, (stat_t*)arg1);
